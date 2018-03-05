@@ -6,8 +6,6 @@ import App from './App'
 
 Vue.config.productionTip = false
 
-console.log(process.env);
-
 Vue.use(VueGoogleMaps, {
   load: {
     key: process.env.GMAPS_API_KEY,
