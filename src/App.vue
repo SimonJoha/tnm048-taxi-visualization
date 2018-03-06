@@ -7,28 +7,44 @@
       style="width: 100vw; height: 90vh"
       @click="clicked">
       
-      <template
-        v-for="(routes) in filteredTaxis">
+      <template v-for="(routes) in filteredTaxis">
+        <template v-for="(path, i) of routes">
           <gmap-polyline
-            v-for="(path, i) of routes"
             v-if="options.hired == null || getHiredBoolean(path[0].hired) == options.hired"
-            :key="`${path[0].id}_${i}`"
+            :key="`polyline_${path[0].id}_${i}`"
             :options="{ strokeWeight: 0.5, strokeColor: getColor(path[0].hired) }"
             :path="path" />
-      </template>
 
+          <gmap-circle 
+            :key="`circle_${i}_${path[0].id}_start`" 
+            :center="path[0]" 
+            :radius="4"
+            :options="{ strokeWeight: 0, fillOpacity: 1, fillColor: getColor('t') }" />
+
+          <gmap-circle 
+            :key="`circle_${i}_${path[0].id}_end`" 
+            :center="path[path.length - 1]" 
+            :radius="4"
+            :options="{ strokeWeight: 0, fillOpacity: 1, fillColor: getColor('f') }" />
+        </template>
+      </template>
+      
       <GmapMarker v-if="routeFilter" :position="routeFilter" />
-      <GmapCircle v-if="routeFilter" :center="routeFilter" :radius="options.routeFilterRadius" />
+      <GmapCircle v-if="routeFilter" :center="routeFilter" :radius="options.routeFilterRadius" :options="{ fillOpacity: 0.1 }" />
 
     </gmap-map>
 
     Hired: <input type="checkbox" v-model="options.hired" />
-    (hired: {{ hiredRatio.hired }}, not: {{ hiredRatio.not }}, ratio {{ hiredRatio.hired / hiredRatio.not }})
+    (hired: {{ hiredRatio.hired }}, not: {{ hiredRatio.not }}, ratio {{ (Math.round(hiredRatio.hired / hiredRatio.not * 100) / 100) }})
   </div>
 </template>
 
 <script>
-import * as taxi from './assets/taxi_20k.csv';
+/*
+import * as taxi_mine_1 from './assets/taxi_1M/taxi_1M_1.csv';
+import * as taxi_mine_2 from './assets/taxi_1M/taxi_1M_2.csv';
+*/
+import * as taxi from './assets/mined/taxi_500k_mined.csv';
 
 export default {
   name: 'app',
@@ -45,11 +61,34 @@ export default {
       options: {
         hired: null,
         routeFilterRadius: 1000
-      }
+      },
+      mining: {
+        array: [],
+        taxiIDs: []
+      },
+      ctrl: false
     };
   },
   mounted() {
+    /*
+    this.mineData(taxi_mine_1);
+    this.mineData(taxi_mine_2);
+
+    console.log(this.mining.array, this.mining.taxiIDs);
+    */
     this.getData();
+
+    window.addEventListener("keydown", e => {
+      // Bind CTRL key
+      if (e.keyCode === 17)
+        this.ctrl = true;
+    });
+
+    window.addEventListener("keyup", e => {
+      // Bind CTRL key
+      if (e.keyCode === 17)
+        this.ctrl = false;
+    });
   },
   computed: {
     filteredTaxis() {
@@ -75,6 +114,7 @@ export default {
             };
 
             for (let i = 0; i < r.length; i++) {
+
               if (Math.sqrt(
                     Math.pow(r[i].lat - rf.lat, 2) + Math.pow(r[i].lng - rf.lng, 2)
                   ) <= radius
@@ -101,6 +141,15 @@ export default {
     }
   },
   methods: {
+    mineData(rawArray) {
+      for (let i = 0; i < rawArray.length; i++)
+        if (this.mining.taxiIDs.length < 50 || this.mining.taxiIDs.indexOf(rawArray[i].id) >= 0) {
+          this.mining.array.push(rawArray[i]);
+
+          if (this.mining.taxiIDs.indexOf(rawArray[i].id) < 0)
+            this.mining.taxiIDs.push(rawArray[i].id);
+        }
+    },
     getData() {
       let taxis = {}
 
@@ -181,8 +230,6 @@ export default {
       return null;
     },
     clicked(position) {
-      console.log('Clicked');
-
       if (this.routeFilter) {
         this.routeFilter = null;
         return;
