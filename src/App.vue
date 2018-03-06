@@ -5,7 +5,8 @@
       :zoom="zoom"
       map-type-id="terrain"
       style="width: 100vw; height: 90vh"
-      @click="clicked">
+      @click="mapClicked"
+      ref="map">
       
       <template v-for="(routes) in filteredTaxis">
         <template v-for="(path, i) of routes">
@@ -15,27 +16,45 @@
             :options="{ strokeWeight: 0.5, strokeColor: getColor(path[0].hired) }"
             :path="path" />
 
-          <gmap-circle 
-            :key="`circle_${i}_${path[0].id}_start`" 
-            :center="path[0]" 
-            :radius="4"
-            :options="{ strokeWeight: 0, fillOpacity: 1, fillColor: getColor('t') }" />
+          <template v-if="options.showStartEndPoints">
+            <gmap-circle 
+              :key="`circle_${i}_${path[0].id}_start`" 
+              :center="path[0]" 
+              :radius="5"
+              :options="{ strokeWeight: 0, fillOpacity: 1, fillColor: getColor('t') }" />
 
-          <gmap-circle 
-            :key="`circle_${i}_${path[0].id}_end`" 
-            :center="path[path.length - 1]" 
-            :radius="4"
-            :options="{ strokeWeight: 0, fillOpacity: 1, fillColor: getColor('f') }" />
+            <gmap-circle 
+              :key="`circle_${i}_${path[0].id}_end`" 
+              :center="path[path.length - 1]" 
+              :radius="5"
+              :options="{ strokeWeight: 0, fillOpacity: 1, fillColor: getColor('f') }" />
+          </template>
+
         </template>
       </template>
       
-      <GmapMarker v-if="routeFilter" :position="routeFilter" />
-      <GmapCircle v-if="routeFilter" :center="routeFilter" :radius="options.routeFilterRadius" :options="{ fillOpacity: 0.1 }" />
+      <!-- FILTERS START -->
+      <GmapMarker 
+        v-if="routeFilters" 
+        v-for="(routeFilter, i) of routeFilters" 
+        :key="`filter_marker_${i}`" 
+        :position="routeFilter"
+        @click="filterMarkerClicked(i)" />
+      
+      <GmapCircle 
+        v-if="routeFilters" 
+        v-for="(routeFilter, i) of routeFilters" 
+        :key="`filter_circle_${i}`"
+        :center="routeFilter" 
+        :radius="options.routeFilterRadius" 
+        :options="{ fillOpacity: 0.1 }" />
+      <!-- FILTERS END -->
 
     </gmap-map>
 
     Hired: <input type="checkbox" v-model="options.hired" />
-    (hired: {{ hiredRatio.hired }}, not: {{ hiredRatio.not }}, ratio {{ (Math.round(hiredRatio.hired / hiredRatio.not * 100) / 100) }})
+    (hired: {{ hiredRatio.hired }}, not: {{ hiredRatio.not }}, ratio {{ hiredRatio.ratio }})
+    Show start and end points: <input type="checkbox" v-model="options.showStartEndPoints" />
   </div>
 </template>
 
@@ -44,7 +63,8 @@
 import * as taxi_mine_1 from './assets/taxi_1M/taxi_1M_1.csv';
 import * as taxi_mine_2 from './assets/taxi_1M/taxi_1M_2.csv';
 */
-import * as taxi from './assets/mined/taxi_500k_mined.csv';
+// import * as taxi from './assets/mined/taxi_500k_mined.csv';
+import * as taxi from './assets/taxi_5k.csv';
 
 export default {
   name: 'app',
@@ -53,14 +73,11 @@ export default {
       center: {lat:59.33258, lng:18.0649},
       zoom: 12,
       taxis: {},
-      routeFilter: null,
-      hiredRatio: {
-        hired: 0,
-        not: 0
-      },
+      routeFilters: [],
       options: {
         hired: null,
-        routeFilterRadius: 1000
+        routeFilterRadius: 1000,
+        showStartEndPoints: false
       },
       mining: {
         array: [],
@@ -68,6 +85,9 @@ export default {
       },
       ctrl: false
     };
+  },
+  deferredReady() {
+    console.log('Hej');
   },
   mounted() {
     /*
@@ -95,49 +115,67 @@ export default {
       // Copy object to new variable
       let filteredTaxis = Object.assign({}, this.taxis);
 
-      if (this.routeFilter) {
-        this.hiredRatio = {
-          hired: 0,
-          not: 0
-        };
+      if (this.routeFilters.length > 0) {
 
         let radius = this.options.routeFilterRadius * 0.00001;
-        let rf = this.routeFilter;
+        
         for (let taxiID in filteredTaxis) {
           let taxi = filteredTaxis[taxiID];
 
           filteredTaxis[taxiID] = taxi.filter((r) => {
-            let visible = false;
-            let singleTaxiHiredRatio = {
-              hired: 0,
-              not: 0
-            };
+            let insideAllFilters = true;
 
-            for (let i = 0; i < r.length; i++) {
+            // Loop through all filter markers
+            this.routeFilters.forEach(rf => {
+              let insideFilter = false;
 
-              if (Math.sqrt(
-                    Math.pow(r[i].lat - rf.lat, 2) + Math.pow(r[i].lng - rf.lng, 2)
-                  ) <= radius
-              )
-                visible = true;
+              // Loop through all routes
+              for (let i = 0; i < r.length; i++) {
 
-              if (this.getHiredBoolean(r[i].hired))
-                singleTaxiHiredRatio.hired++;
-              else
-                singleTaxiHiredRatio.not++;
-            }
+                // Check if any point is inside filter radius
+                if (Math.sqrt(
+                      Math.pow(r[i].lat - rf.lat, 2) + Math.pow(r[i].lng - rf.lng, 2)
+                    ) <= radius
+                )
+                  insideFilter = true;
 
-            if (visible) {
-              this.hiredRatio.hired += singleTaxiHiredRatio.hired;
-              this.hiredRatio.not += singleTaxiHiredRatio.not;
-            }            
-              
-            return visible;
-          })
+              }
+
+              // If not inside current iterated filter
+              // Hide on map
+              if (!insideFilter)
+                insideAllFilters = false;
+            });
+
+            return insideAllFilters;
+
+          });
         }
       }
 
       return filteredTaxis;
+    },
+    hiredRatio() {
+      let taxis = this.filteredTaxis;
+      let hiredRatio = {
+        hired: 0,
+        not: 0,
+        ratio: null
+      };
+
+      for (let taxiID in taxis) {
+        taxis[taxiID].forEach((r) => {
+          if (this.getHiredBoolean(r[0].hired))
+            hiredRatio.hired += r.length;
+          else
+            hiredRatio.not += r.length;
+        });
+      }
+
+      if (hiredRatio.not > 0)
+        hiredRatio.ratio = (Math.round(hiredRatio.hired / hiredRatio.not * 100) / 100);
+
+      return hiredRatio;
     }
   },
   methods: {
@@ -159,11 +197,6 @@ export default {
           taxis[id] = [];
 
         taxis[id].push(taxi[i]);
-
-        if (this.getHiredBoolean(taxi[i].hired))
-          this.hiredRatio.hired++;
-        else
-          this.hiredRatio.not++;
       }
 
       for (let taxiID in taxis)
@@ -205,8 +238,17 @@ export default {
           taxiCoordinates[i].time > routes[routeID][index].time + 180 ||
           taxiCoordinates[i].hired !== routes[routeID][index].hired
         ) {
-          routeID++;
-          routes.push([]);
+          // If subroute includes 2 or more coordinates
+          // Create new subroute for future coordinates
+          if (routes[routeID].length > 1) {
+            routeID++;
+            routes.push([]);
+
+          // If subroute does not have multiple coordinates
+          // Skip save
+          } else {
+            routes[routeID] = [];
+          }
         }
         
         // Add record to correspondingg route array
@@ -229,17 +271,21 @@ export default {
 
       return null;
     },
-    clicked(position) {
-      if (this.routeFilter) {
-        this.routeFilter = null;
+    mapClicked(position) {
+      // Reset filters if CTRL key was not pressed
+      if (!this.ctrl && this.routeFilters.length > 0) {
+        this.routeFilters = [];
         return;
       }
 
       let latLng = position.latLng;
-      this.routeFilter = {
+      this.routeFilters.push({
         lat: latLng.lat(),
         lng: latLng.lng()
-      }
+      });
+    },
+    filterMarkerClicked(i) {
+      this.routeFilters.splice(i, 1);
     }
   }
 }
