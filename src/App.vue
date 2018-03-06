@@ -11,7 +11,7 @@
       <template v-for="(routes) in filteredTaxis">
         <template v-for="(path, i) of routes">
           <gmap-polyline
-            v-if="options.hired == null || getHiredBoolean(path[0].hired) == options.hired"
+            v-if="options.hiredMode == 0 || path[0].hired == options.hiredMode"
             :key="`polyline_${path[0].id}_${i}`"
             :options="{ strokeWeight: 0.5, strokeColor: getColor(path[0].hired) }"
             :path="path" />
@@ -52,8 +52,13 @@
 
     </gmap-map>
 
-    Hired: <input type="checkbox" v-model="options.hired" />
+    <select v-model="options.hiredMode">
+      <option value="0">All cars</option>
+      <option value="t">Hired cars</option>
+      <option value="f">Not hired cars</option>
+    </select>
     (hired: {{ hiredRatio.hired }}, not: {{ hiredRatio.not }}, ratio {{ hiredRatio.ratio }})
+    
     Show start and end points: <input type="checkbox" v-model="options.showStartEndPoints" />
   </div>
 </template>
@@ -63,8 +68,7 @@
 import * as taxi_mine_1 from './assets/taxi_1M/taxi_1M_1.csv';
 import * as taxi_mine_2 from './assets/taxi_1M/taxi_1M_2.csv';
 */
-// import * as taxi from './assets/mined/taxi_500k_mined.csv';
-import * as taxi from './assets/taxi_5k.csv';
+import * as taxi from './assets/mined/taxi_500k_mined.csv';
 
 export default {
   name: 'app',
@@ -75,7 +79,7 @@ export default {
       taxis: {},
       routeFilters: [],
       options: {
-        hired: null,
+        hiredMode: 0,
         routeFilterRadius: 1000,
         showStartEndPoints: false
       },
@@ -83,7 +87,7 @@ export default {
         array: [],
         taxiIDs: []
       },
-      ctrl: false
+      ctrl: false,
     };
   },
   deferredReady() {
