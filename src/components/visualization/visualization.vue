@@ -113,6 +113,7 @@
       <md-card>
         <md-card-header>
           <div class="md-title">Statistics</div>
+          <div class="md-subhead">Coordinates on map</div>
         </md-card-header>
         <md-card-content>
           <md-table>
